@@ -9,6 +9,20 @@
 #include <tag.h>
 #include <iostream>
 
+#include <cstdio>
+std::string exec(const char* cmd) {
+    FILE* pipe = popen(cmd, "r");
+    if (!pipe) return "ERROR";
+    char buffer[128];
+    std::string result = "";
+    while(!feof(pipe)) {
+    	if(fgets(buffer, 128, pipe) != NULL)
+    		result += buffer;
+    }
+    pclose(pipe);
+    return result;
+}
+
 Metadata::Metadata(const string& file) : _Filename(file), _Artist(""), _Album(""), _Title(""), _Genre(""), _Bitrate(0), _SampleRate(0), _Seconds(0) {
     if (file != "stdin") {
         // TODO: Consider removing the path from the filename -- not sure if we can do this in a platform-independent way.
@@ -27,6 +41,10 @@ Metadata::Metadata(const string& file) : _Filename(file), _Artist(""), _Album(""
             _Bitrate = properties->bitrate();
             _SampleRate = properties->sampleRate();
             _Seconds = properties->length();
+        }
+        if (_Seconds == 0) {
+            std::string command = "ffprobe -show_format " + _Filename + " | grep duration | sed 's/.*=//'";
+            _Seconds = atof( exec(command.c_str()).c_str() );
         }
     }
 }
