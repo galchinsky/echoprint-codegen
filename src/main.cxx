@@ -26,7 +26,7 @@ using namespace std;
 // to create a json string.
 typedef struct {
     char *error;
-    char *filename;
+    const char *filename;
     int start_offset;
     int duration;
     int tag;
@@ -108,7 +108,42 @@ std::string escape(const string& value) {
     return out;
 }
 
-codegen_response_t *codegen_file(char* filename, int start_offset, int duration, int tag) {
+codegen_response_t* codegen_piece(const float* samples,
+                                  int sampling_rate,
+                                  int start_offset,
+                                  int duration,
+                                  int tag,
+                                  const char* filename) {
+    double t1 = now();
+    int start_offset_sample = sampling_rate * start_offset;
+    int duration_in_samples = sampling_rate * duration;
+    codegen_response_t *response = (codegen_response_t *)malloc(sizeof(codegen_response_t));
+    response->error = NULL;
+    response->codegen = NULL;
+
+    t1 = now() - t1;
+
+    double t2 = now();
+    Codegen *pCodegen = new Codegen(&samples[start_offset_sample], duration_in_samples, start_offset);
+    t2 = now() - t2;
+    
+    response->t1 = t1;
+    response->t2 = t2;
+    response->numSamples = duration_in_samples;
+    response->codegen = pCodegen;
+    response->start_offset = start_offset;
+    response->duration = duration;
+    response->tag = tag;
+    response->filename = filename;
+    
+    return response;
+   
+}
+
+codegen_response_t *codegen_file(char* filename,
+                                 int start_offset,
+                                 int duration,
+                                 int tag) {
     // Given a filename, perform a codegen on it and get the response
     // This is called by a thread
     double t1 = now();
@@ -167,36 +202,28 @@ void *threaded_codegen_file(void *parm) {
     return NULL;
 }
 
-void print_json_to_screen(char* output, int count, int done) {
-    // Print a json block depending on how many there are and where we are.
-    if(done==1 && count>1) {
-        printf("[\n%s,\n", output);
-    } else if(done==1 && count == 1) {
-        printf("[\n%s\n]\n", output);
-    } else if(done == count) {
-        printf("%s\n]\n", output);
-    } else {
-        printf("%s,\n", output);
-    }
-}
-
-char *make_json_string(codegen_response_t* response) {
+char *make_json_string(Metadata* pMetadata, codegen_response_t* response) {
     
     if (response->error != NULL) {
         return response->error;
     }
     
-    // Get the ID3 tag information.
-    auto_ptr<Metadata> pMetadata(new Metadata(response->filename));
-
     // preamble + codelen
     char* output = (char*) malloc(sizeof(char)*(16384 + strlen(response->codegen->getCodeString().c_str()) ));
+
+    string artist;
+    //if tags are empty
+    if ( pMetadata->Seconds() == 0 ) {
+        artist = response->filename;
+    } else {
+        artist = pMetadata->Artist();
+    }
 
     sprintf(output,"{\"metadata\":{\"artist\":\"%s\", \"release\":\"%s\", \"title\":\"%s\", \"genre\":\"%s\", \"bitrate\":%d,"
                     "\"sample_rate\":%d, \"duration\":%d, \"filename\":\"%s\", \"samples_decoded\":%d, \"given_duration\":%d,"
                     " \"start_offset\":%d, \"version\":%2.2f, \"codegen_time\":%2.6f, \"decode_time\":%2.6f}, \"code_count\":%d,"
                     " \"code\":\"%s\", \"tag\":%d}",
-        escape(pMetadata->Artist()).c_str(),
+        escape(artist).c_str(),
         escape(pMetadata->Album()).c_str(),
         escape(pMetadata->Title()).c_str(),
         escape(pMetadata->Genre()).c_str(),
@@ -219,49 +246,97 @@ char *make_json_string(codegen_response_t* response) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s [ filename | -s ] [seconds_start] [seconds_duration] [< file_list (if -s is set)]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [ filename | -s ] [seconds_start] [seconds_duration] [piece_interval] [piece_duration] [< file_list (if -s is set)]\n", argv[0]);
         exit(-1);
     }
 
     try {
         string files[MAX_FILES];
         char *filename = argv[1];
-        int count = 0;
+        int files_count = 0;
         int start_offset = 0;
         int duration = 0;
+        int piece_interval = 0;
+        int piece_duration = 0;
         int already = 0;
         if (argc > 2) start_offset = atoi(argv[2]);
         if (argc > 3) duration = atoi(argv[3]);
-        if (argc > 4) already = atoi(argv[4]);
+        if (argc > 4) piece_interval = atoi(argv[4]);
+        if (argc > 5) piece_duration = atoi(argv[5]);
+        if (argc > 6) already = atoi(argv[6]);
         // If you give it -s, it means to read in a list of files from stdin.
         if (strcmp(filename, "-s") == 0) {
             while(cin) {
-                if (count < MAX_FILES) {
+                if (files_count < MAX_FILES) {
                     string temp_str;
                     getline(cin, temp_str);
                     if (temp_str.size() > 2)
-                        files[count++] = temp_str;
+                        files[files_count++] = temp_str;
                 } else {
                     throw std::runtime_error("Too many files on stdin to process\n");
                 }
             }
-        } else files[count++] = filename;
+        } else files[files_count++] = filename;
 
-        if(count == 0) throw std::runtime_error("No files given.\n");
+        if(files_count == 0) throw std::runtime_error("No files given.\n");
 
+//add threading later
+#if 1
 
-#ifdef _WIN32
-        // Threading doesn't work in windows yet.
-        for(int i=0;i<count;i++) {
-            codegen_response_t* response = codegen_file((char*)files[i].c_str(), start_offset, duration, i);
-            char *output = make_json_string(response);
-            print_json_to_screen(output, count, i+1);
-            if (response->codegen) {
-                delete response->codegen;
+        printf("[");
+
+        int pieces_count = duration / piece_duration;
+        for(int i=0; i<files_count; i++) {
+            auto_ptr<FfmpegStreamInput> pAudio(new FfmpegStreamInput());
+            pAudio->ProcessFile(files[i].c_str(), start_offset, duration);
+
+            // Get the ID3 tag information.
+            auto_ptr<Metadata> pMetadata(new Metadata(files[i].c_str()));
+
+            if (pAudio.get() == NULL) { // Unable to decode!
+                printf("{\"error\":\"could not create decoder\", \"tag\":%d, \"metadata\":{\"filename\":\"%s\"}}", 
+                        0,
+                        escape(filename).c_str());
+                return 0;
             }
-            free(response);
-            free(output);
+            
+            int numSamples = pAudio->getNumSamples();
+
+            if (numSamples < 1) {
+                printf("{\"error\":\"could not decode\", \"tag\":%d, \"metadata\":{\"filename\":\"%s\"}}",
+                       0,
+                       escape(filename).c_str());
+                return 0;
+            }
+
+            int sampling_rate = pAudio->getSamplingRate();
+            const float* samples = pAudio->getSamples();
+                        
+            for (int piece_idx = 0; piece_idx < pieces_count; ++piece_idx) {
+                int start_offset = piece_idx * piece_interval;
+
+                if (start_offset + piece_duration > pAudio->getDuration()) {
+                    break;
+                }
+                codegen_response_t* response = codegen_piece(samples, sampling_rate, 
+                                                             start_offset, piece_duration, i,
+                                                             files[i].c_str());
+                char *output = make_json_string(pMetadata.get(), response);
+                if (i == 0 && piece_idx == 0) {
+                    printf("\n%s", output);
+                } else {
+                    printf(",\n%s", output);
+                }
+                
+
+                if (response->codegen) {
+                    delete response->codegen;
+                }
+                free(response);
+                free(output);
+            }
         }
+        printf("\n]\n");
         return 0;
 
 #else
@@ -270,7 +345,7 @@ int main(int argc, char** argv) {
         int num_threads = getNumCores();
         if (num_threads > 8) num_threads = 8;
         if (num_threads < 2) num_threads = 2;
-        if (num_threads > count) num_threads = count;
+        if (num_threads > files_count) num_threads = files_count;
 
         // Setup threading
         pthread_t *t = (pthread_t*)malloc(sizeof(pthread_t)*num_threads);
@@ -278,7 +353,7 @@ int main(int argc, char** argv) {
         pthread_attr_t *attr = (pthread_attr_t*)malloc(sizeof(pthread_attr_t)*num_threads);
 
         // Kick off the first N threads
-        int still_left = count-1-already;
+        int still_left = files_count-1-already;
         for(int i=0;i<num_threads;i++) {
             parm[i] = (thread_parm_t *)malloc(sizeof(thread_parm_t));
             parm[i]->filename = (char*)files[still_left].c_str();
@@ -296,7 +371,7 @@ int main(int argc, char** argv) {
 
         int done = 0;
         // Now wait for the threads to come back, and also kick off new ones
-        while(done<count) {
+        while(done<files_count) {
             // Check which threads are done
             for(int i=0;i<num_threads;i++) {
                 if (parm[i]->done) {
@@ -304,7 +379,7 @@ int main(int argc, char** argv) {
                     done++;
                     codegen_response_t *response = (codegen_response_t*)parm[i]->response;
                     char *json = make_json_string(response);
-                    print_json_to_screen(json, count, done);
+                    print_json_to_screen(json, files_count, done);
                     if (response->codegen) {
                         delete response->codegen;
                     }

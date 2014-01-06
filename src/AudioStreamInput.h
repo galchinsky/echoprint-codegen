@@ -28,6 +28,7 @@ public:
     bool ProcessRawFile(const char* rawFilename);
     bool ProcessStandardInput(void);
     bool ProcessFilePointer(FILE* pFile);
+    int getSamplingRate() const { return Params::AudioStreamInput::SamplingRate; }
     int getNumSamples() const {return _NumberSamples;}
     const float* getSamples() {return _pSamples;}
     double getDuration() { return (double)getNumSamples() / Params::AudioStreamInput::SamplingRate; }
