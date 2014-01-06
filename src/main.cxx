@@ -213,7 +213,7 @@ char *make_json_string(Metadata* pMetadata, codegen_response_t* response) {
 
     string artist;
     //if tags are empty
-    if ( pMetadata->Seconds() == 0 ) {
+    if ( !pMetadata->TagsFilled() ) {
         artist = response->filename;
     } else {
         artist = pMetadata->Artist();
@@ -246,7 +246,7 @@ char *make_json_string(Metadata* pMetadata, codegen_response_t* response) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s [ filename | -s ] [seconds_start] [seconds_duration] [piece_interval] [piece_duration] [< file_list (if -s is set)]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [ filename | -s ] [seconds_start] [{seconds_duration|0}] [piece_interval] [piece_duration] [< file_list (if -s is set)]\n", argv[0]);
         exit(-1);
     }
 
@@ -285,13 +285,18 @@ int main(int argc, char** argv) {
 
         printf("[");
 
-        int pieces_count = duration / piece_duration;
         for(int i=0; i<files_count; i++) {
-            auto_ptr<FfmpegStreamInput> pAudio(new FfmpegStreamInput());
-            pAudio->ProcessFile(files[i].c_str(), start_offset, duration);
-
             // Get the ID3 tag information.
             auto_ptr<Metadata> pMetadata(new Metadata(files[i].c_str()));
+
+            if (duration == 0) {
+                duration = pMetadata->Seconds();
+            }
+
+            int pieces_count = duration / piece_duration;
+
+            auto_ptr<FfmpegStreamInput> pAudio(new FfmpegStreamInput());
+            pAudio->ProcessFile(files[i].c_str(), start_offset, duration);
 
             if (pAudio.get() == NULL) { // Unable to decode!
                 printf("{\"error\":\"could not create decoder\", \"tag\":%d, \"metadata\":{\"filename\":\"%s\"}}", 

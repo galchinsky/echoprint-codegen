@@ -15,6 +15,7 @@ using std::string;
 class Metadata {
 public:
     Metadata(const std::string& file);
+    bool TagsFilled() {return _TagsFilled;}
     string Filename() {return _Filename;}
     string Artist(){ return _Artist;}
     string Album() { return _Album;}
@@ -24,6 +25,8 @@ public:
     int SampleRate(){ return _SampleRate;}
     int Seconds() { return _Seconds;}
 private:
+    bool _TagsFilled;
+
     string _Filename;
     string _Artist;
     string _Album;

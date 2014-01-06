@@ -23,7 +23,10 @@ std::string exec(const char* cmd) {
     return result;
 }
 
-Metadata::Metadata(const string& file) : _Filename(file), _Artist(""), _Album(""), _Title(""), _Genre(""), _Bitrate(0), _SampleRate(0), _Seconds(0) {
+Metadata::Metadata(const string& file) : _TagsFilled(false),
+                                         _Filename(file), _Artist(""), 
+                                         _Album(""), _Title(""), _Genre(""), 
+                                         _Bitrate(0), _SampleRate(0), _Seconds(0) {
     if (file != "stdin") {
         // TODO: Consider removing the path from the filename -- not sure if we can do this in a platform-independent way.
         TagLib::FileRef f(_Filename.c_str());
@@ -34,6 +37,7 @@ Metadata::Metadata(const string& file) : _Filename(file), _Artist(""), _Album(""
             _Album = tag->album().to8Bit(true);
             _Title = tag->title().to8Bit(true);
             _Genre = tag->genre().to8Bit(true);
+            _TagsFilled = true;
         }
 
         TagLib::AudioProperties* properties = f.isNull() ? NULL : f.audioProperties();
@@ -43,7 +47,7 @@ Metadata::Metadata(const string& file) : _Filename(file), _Artist(""), _Album(""
             _Seconds = properties->length();
         }
         if (_Seconds == 0) {
-            std::string command = "ffprobe -show_format " + _Filename + " | grep duration | sed 's/.*=//'";
+            std::string command = "ffprobe -show_format " + _Filename + " | grep duration | sed 's/.*=//' 2> /dev/null";
             _Seconds = atof( exec(command.c_str()).c_str() );
         }
     }
