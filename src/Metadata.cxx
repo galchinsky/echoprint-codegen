@@ -23,6 +23,28 @@ std::string exec(const char* cmd) {
     return result;
 }
 
+// deal with quotes etc in shell
+static std::string escape(const string& value) {
+    std::string s(value);
+    std::string out = "";
+    out.reserve(s.size());
+    for (size_t i = 0; i < s.size(); i++) {
+        char c = s[i];
+        if ((unsigned char)c < 31)
+            continue;
+
+        switch (c) {
+            case '"' : out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case ' ': out += "\\ " ; break;
+            default:
+                out += c;
+        }
+    }
+
+    return out;
+}
+
 Metadata::Metadata(const string& file) : _TagsFilled(false),
                                          _Filename(file), _Artist(""), 
                                          _Album(""), _Title(""), _Genre(""), 
@@ -47,7 +69,8 @@ Metadata::Metadata(const string& file) : _TagsFilled(false),
             _Seconds = properties->length();
         }
         if (_Seconds == 0) {
-            std::string command = "ffprobe -show_format " + _Filename + " | grep duration | sed 's/.*=//' 2> /dev/null";
+            std::string command = "ffprobe -show_format " + escape(_Filename) 
+                + " | grep duration | sed 's/.*=//' 2> /dev/null";
             _Seconds = atof( exec(command.c_str()).c_str() );
         }
     }

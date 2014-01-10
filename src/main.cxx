@@ -81,7 +81,7 @@ int getNumCores() {
 }
 
 // deal with quotes etc in json
-std::string escape(const string& value) {
+static std::string escape(const string& value) {
     std::string s(value);
     std::string out = "";
     out.reserve(s.size());
@@ -109,6 +109,7 @@ std::string escape(const string& value) {
 }
 
 codegen_response_t* codegen_piece(const float* samples,
+                                  int max_samples_size,
                                   int sampling_rate,
                                   int start_offset,
                                   int duration,
@@ -117,6 +118,9 @@ codegen_response_t* codegen_piece(const float* samples,
     double t1 = now();
     int start_offset_sample = sampling_rate * start_offset;
     int duration_in_samples = sampling_rate * duration;
+    if (start_offset_sample + duration_in_samples >= max_samples_size) {
+        duration_in_samples = max_samples_size - start_offset_sample;
+    }
     codegen_response_t *response = (codegen_response_t *)malloc(sizeof(codegen_response_t));
     response->error = NULL;
     response->codegen = NULL;
@@ -124,7 +128,12 @@ codegen_response_t* codegen_piece(const float* samples,
     t1 = now() - t1;
 
     double t2 = now();
+    fprintf(stderr, "Codegen. Offset: %d Duration: %d Sample_rate: %d\n", start_offset_sample,
+            duration_in_samples,
+            sampling_rate);
+    fflush(stderr);
     Codegen *pCodegen = new Codegen(&samples[start_offset_sample], duration_in_samples, start_offset);
+
     t2 = now() - t2;
     
     response->t1 = t1;
@@ -213,11 +222,11 @@ char *make_json_string(Metadata* pMetadata, codegen_response_t* response) {
 
     string artist;
     //if tags are empty
-    if ( !pMetadata->TagsFilled() ) {
+    //if ( !pMetadata->TagsFilled() ) {
         artist = response->filename;
-    } else {
-        artist = pMetadata->Artist();
-    }
+    //} else {
+    //    artist = pMetadata->Artist();
+    //}
 
     sprintf(output,"{\"metadata\":{\"artist\":\"%s\", \"release\":\"%s\", \"title\":\"%s\", \"genre\":\"%s\", \"bitrate\":%d,"
                     "\"sample_rate\":%d, \"duration\":%d, \"filename\":\"%s\", \"samples_decoded\":%d, \"given_duration\":%d,"
@@ -289,14 +298,21 @@ int main(int argc, char** argv) {
             // Get the ID3 tag information.
             auto_ptr<Metadata> pMetadata(new Metadata(files[i].c_str()));
 
-            if (duration == 0) {
-                duration = pMetadata->Seconds();
+            int current_duration = duration;
+            if (current_duration == 0) {
+                current_duration = pMetadata->Seconds();
             }
 
-            int pieces_count = duration / piece_duration;
+            int pieces_count = current_duration / piece_interval;
+            //fprintf(stderr, "pieces_count: %d/%d=%d\n", current_duration, piece_interval, pieces_count);
+
+            //for testing
+            if (pieces_count == 0) {
+                pieces_count = 1;
+            }
 
             auto_ptr<FfmpegStreamInput> pAudio(new FfmpegStreamInput());
-            pAudio->ProcessFile(files[i].c_str(), start_offset, duration);
+            pAudio->ProcessFile(files[i].c_str(), start_offset, current_duration);
 
             if (pAudio.get() == NULL) { // Unable to decode!
                 printf("{\"error\":\"could not create decoder\", \"tag\":%d, \"metadata\":{\"filename\":\"%s\"}}", 
@@ -319,20 +335,27 @@ int main(int argc, char** argv) {
                         
             for (int piece_idx = 0; piece_idx < pieces_count; ++piece_idx) {
                 int start_offset = piece_idx * piece_interval;
+                fprintf(stderr, "start_offset: %d\n", start_offset);
 
-                if (start_offset + piece_duration > pAudio->getDuration()) {
+                if (start_offset + piece_duration > pMetadata->Seconds()) {
+                    fprintf(stderr, "break on file size limit: %d + %d > %d\n", 
+                            start_offset,
+                            piece_duration,
+                            pMetadata->Seconds());
                     break;
                 }
-                codegen_response_t* response = codegen_piece(samples, sampling_rate, 
+
+                codegen_response_t* response = codegen_piece(samples, numSamples,
+                                                             sampling_rate, 
                                                              start_offset, piece_duration, i,
                                                              files[i].c_str());
+
                 char *output = make_json_string(pMetadata.get(), response);
                 if (i == 0 && piece_idx == 0) {
                     printf("\n%s", output);
                 } else {
                     printf(",\n%s", output);
                 }
-                
 
                 if (response->codegen) {
                     delete response->codegen;
