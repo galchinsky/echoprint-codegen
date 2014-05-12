@@ -302,6 +302,10 @@ int main(int argc, char** argv) {
             if (current_duration == 0) {
                 current_duration = pMetadata->Seconds();
             }
+            int current_piece_duration = piece_duration;
+            if (duration == 0) {
+                current_piece_duration = pMetadata->Seconds() - 1;
+            }
 
             int pieces_count = current_duration / piece_interval;
             //fprintf(stderr, "pieces_count: %d/%d=%d\n", current_duration, piece_interval, pieces_count);
@@ -337,17 +341,17 @@ int main(int argc, char** argv) {
                 int start_offset = piece_idx * piece_interval;
                 fprintf(stderr, "start_offset: %d\n", start_offset);
 
-                if (start_offset + piece_duration > pMetadata->Seconds()) {
+                if (start_offset + current_piece_duration > pMetadata->Seconds()) {
                     fprintf(stderr, "break on file size limit: %d + %d > %d\n", 
                             start_offset,
-                            piece_duration,
+                            current_piece_duration,
                             pMetadata->Seconds());
                     break;
                 }
 
                 codegen_response_t* response = codegen_piece(samples, numSamples,
                                                              sampling_rate, 
-                                                             start_offset, piece_duration, i,
+                                                             start_offset, current_piece_duration, i,
                                                              files[i].c_str());
 
                 char *output = make_json_string(pMetadata.get(), response);
