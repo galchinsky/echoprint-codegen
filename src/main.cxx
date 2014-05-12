@@ -303,7 +303,7 @@ int main(int argc, char** argv) {
                 current_duration = pMetadata->Seconds();
             }
             int current_piece_duration = piece_duration;
-            if (duration == 0) {
+            if (piece_duration == 0) {
                 current_piece_duration = pMetadata->Seconds() - 1;
             }
 
