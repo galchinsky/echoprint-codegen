@@ -211,7 +211,7 @@ void *threaded_codegen_file(void *parm) {
     return NULL;
 }
 
-char *make_json_string(Metadata* pMetadata, codegen_response_t* response) {
+char *make_json_string(Metadata* pMetadata, codegen_response_t* response, const char* source_id) {
     
     if (response->error != NULL) {
         return response->error;
@@ -228,10 +228,11 @@ char *make_json_string(Metadata* pMetadata, codegen_response_t* response) {
     //    artist = pMetadata->Artist();
     //}
 
-    sprintf(output,"{\"metadata\":{\"artist\":\"%s\", \"release\":\"%s\", \"title\":\"%s\", \"genre\":\"%s\", \"bitrate\":%d,"
+    sprintf(output,"{\"metadata\":{\"source\":\"%s\", \"artist\":\"%s\", \"release\":\"%s\", \"title\":\"%s\", \"genre\":\"%s\", \"bitrate\":%d,"
                     "\"sample_rate\":%d, \"duration\":%d, \"filename\":\"%s\", \"samples_decoded\":%d, \"given_duration\":%d,"
                     " \"start_offset\":%d, \"version\":%2.2f, \"codegen_time\":%2.6f, \"decode_time\":%2.6f}, \"code_count\":%d,"
                     " \"code\":\"%s\", \"tag\":%d}",
+	source_id,
         escape(artist).c_str(),
         escape(pMetadata->Album()).c_str(),
         escape(pMetadata->Title()).c_str(),
@@ -267,12 +268,14 @@ int main(int argc, char** argv) {
         int duration = 0;
         int piece_interval = 0;
         int piece_duration = 0;
-        int already = 0;
+        //int already = 0;
+	string source_id = "unknown";
         if (argc > 2) start_offset = atoi(argv[2]);
         if (argc > 3) duration = atoi(argv[3]);
         if (argc > 4) piece_interval = atoi(argv[4]);
         if (argc > 5) piece_duration = atoi(argv[5]);
-        if (argc > 6) already = atoi(argv[6]);
+        //if (argc > 6) already = atoi(argv[6]);
+	if (argc > 6) source_id = argv[6];
         // If you give it -s, it means to read in a list of files from stdin.
         if (strcmp(filename, "-s") == 0) {
             while(cin) {
@@ -354,7 +357,7 @@ int main(int argc, char** argv) {
                                                              start_offset, current_piece_duration, i,
                                                              files[i].c_str());
 
-                char *output = make_json_string(pMetadata.get(), response);
+                char *output = make_json_string(pMetadata.get(), response, source_id.c_str());
                 if (i == 0 && piece_idx == 0) {
                     printf("\n%s", output);
                 } else {
