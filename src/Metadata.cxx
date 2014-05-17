@@ -69,7 +69,7 @@ Metadata::Metadata(const string& file) : _TagsFilled(false),
             _Seconds = properties->length();
         }
         if (_Seconds == 0) {
-            std::string command = "ffprobe -show_format " + escape(_Filename) 
+            std::string command = "avprobe -show_format " + escape(_Filename) 
                 + " | grep duration | sed 's/.*=//' 2> /dev/null";
             _Seconds = atof( exec(command.c_str()).c_str() );
         }
