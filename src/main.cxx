@@ -218,7 +218,9 @@ char *make_json_string(Metadata* pMetadata, codegen_response_t* response, const 
     }
     
     // preamble + codelen
-    char* output = (char*) malloc(sizeof(char)*(16384 + strlen(response->codegen->getCodeString().c_str()) ));
+    string code_string = response->codegen->getCodeString();
+    string decoded_string = response->codegen->getDecodedString();
+    char* output = (char*) malloc(sizeof(char)*(16384 + code_string.size() + decoded_string.size()  ));
 
     string artist;
     //if tags are empty
@@ -227,20 +229,25 @@ char *make_json_string(Metadata* pMetadata, codegen_response_t* response, const 
     //} else {
     //    artist = pMetadata->Artist();
     //}
+    string s_artist = escape(artist);
+    string s_album = escape(pMetadata->Album());
+    string s_title = escape(pMetadata->Title());
+    string s_genre = escape(pMetadata->Genre());
+    string s_filename = escape(response->filename);
 
     sprintf(output,"{\"metadata\":{\"source\":\"%s\", \"artist\":\"%s\", \"release\":\"%s\", \"title\":\"%s\", \"genre\":\"%s\", \"bitrate\":%d,"
                     "\"sample_rate\":%d, \"duration\":%d, \"filename\":\"%s\", \"samples_decoded\":%d, \"given_duration\":%d,"
                     " \"start_offset\":%d, \"version\":%2.2f, \"codegen_time\":%2.6f, \"decode_time\":%2.6f}, \"code_count\":%d,"
-                    " \"code\":\"%s\", \"tag\":%d}",
+                    " \"code\":\"%s\", \"tag\":%d, \"decoded\":\"%s\" }",
 	source_id,
-        escape(artist).c_str(),
-        escape(pMetadata->Album()).c_str(),
-        escape(pMetadata->Title()).c_str(),
-        escape(pMetadata->Genre()).c_str(),
+        s_artist.c_str(),
+        s_album.c_str(),
+        s_title.c_str(),
+        s_genre.c_str(),
         pMetadata->Bitrate(),
         pMetadata->SampleRate(),
         pMetadata->Seconds(),
-        escape(response->filename).c_str(),
+        s_filename.c_str(),
         response->numSamples,
         response->duration,
         response->start_offset,
@@ -248,8 +255,9 @@ char *make_json_string(Metadata* pMetadata, codegen_response_t* response, const 
         response->t2,
         response->t1,
         response->codegen->getNumCodes(),
-        response->codegen->getCodeString().c_str(),
-        response->tag
+        code_string.c_str(),
+        response->tag,
+        decoded_string.c_str()
     );
     return output;
 }

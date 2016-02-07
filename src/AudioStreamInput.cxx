@@ -58,6 +58,7 @@ bool AudioStreamInput::ProcessFile(const char* filename, int offset_s/*=0*/, int
     _Offset_s = offset_s;
     _Seconds = seconds;
     std::string message = GetCommandLine(filename);
+    fprintf(stderr, "%s\n", message.c_str());
 
     FILE* fp = popen(message.c_str(), POPEN_MODE);
     bool ok = (fp != NULL);

@@ -34,14 +34,17 @@ public:
     Codegen(const float* pcm, unsigned int numSamples, int start_offset);
 
     std::string getCodeString(){return _CodeString;}
+    std::string getDecodedString() { return _DecodedString; }
+
     int getNumCodes(){return _NumCodes;}
     static double getVersion() { return ECHOPRINT_VERSION; }
 private:
     Fingerprint* computeFingerprint(SubbandAnalysis *pSubbandAnalysis, int start_offset);
-    std::string createCodeString(std::vector<FPCode> vCodes);
+    std::string createCodeString(const std::vector<FPCode>& vCodes);
 
     std::string compress(const std::string& s);
     std::string _CodeString;
+    std::string _DecodedString;
     int _NumCodes;
 };
 

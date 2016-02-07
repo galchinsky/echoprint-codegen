@@ -47,19 +47,32 @@ Codegen::Codegen(const float* pcm, unsigned int numSamples, int start_offset) {
     delete pAudio;
 }
 
-string Codegen::createCodeString(vector<FPCode> vCodes) {
+#include <cstdlib>
+
+string Codegen::createCodeString(const vector<FPCode>& vCodes) {
     if (vCodes.size() < 3) {
         return "";
     }
     std::ostringstream codestream;
+    std::ostringstream codestream2;
+    _DecodedString = "";
     codestream << std::setfill('0') << std::hex;
-    for (uint i = 0; i < vCodes.size(); i++)
-        codestream << std::setw(5) << vCodes[i].frame;
-
+    for (uint i = 0; i < vCodes.size(); i++) {
+        int frame = vCodes[i].frame;
+        codestream << std::setw(5) << frame;
+        codestream2 << frame << " ";
+    }
     for (uint i = 0; i < vCodes.size(); i++) {
         int hash = vCodes[i].code;
         codestream << std::setw(5) << hash;
+        codestream2 << hash << " ";
     }
+
+    _DecodedString = codestream2.str();
+     
+    
+//    std::cerr << _DecodedString << std::endl;
+
     return compress(codestream.str());
 }
 
